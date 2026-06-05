@@ -3,6 +3,7 @@ from discord.ext import commands, tasks
 import os
 import threading
 import asyncio
+import re
 from flask import Flask
 from groq import Groq
 
@@ -10,23 +11,19 @@ from groq import Groq
 app = Flask(__name__)
 @app.route('/')
 def home():
-    return "Nike Bot (24/7 Voice Gym & Chat) is alive!"
+    return "Nike Bot (24/7 Premium Voice & Chat) is alive!"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
 
 intents = discord.Intents.default()
 intents.message_content = True
-intents.voice_states = True  # จำเป็นมากสำหรับการเฝ้าห้องว้อย
+intents.voice_states = True  
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 client = Groq(api_key=os.environ.get('GROQ_API_KEY'))
 user_histories = {}
 user_stats = {} 
-
-# ไฟล์เสียงเงียบขนาดเล็ก (Silent Base) เอาไว้ส่งหลอก Discord
-# บอทจะส่งข้อมูล 0 เพื่อให้สถานะไมค์ขยับแต่ไม่มีเสียงรบกวนคนในห้อง
-SILENT_BYTES = bytes(3840) 
 
 # 2. System Prompt
 SYSTEM_PROMPT = """
@@ -42,26 +39,42 @@ SYSTEM_PROMPT = """
 - แฝด: จอร์แดน (แฝดพี่) ชอบแฮกกล้องหรือส่งข้อความกวนประสาท
 """
 
-# 🕒 ลูปนรก 20 วินาที ส่งเสียงเงียบหลอก Discord กันโดนเตะ AFK (ปั๊มชั่วโมงคอล)
-@tasks.loop(seconds=20)
+# 🕒 ฟังก์ชันสำหรับเล่นเสียงใบ้ (Silent Audio) แบบวนลูปไหลยาวๆ เพื่อสะสมชั่วโมงดิสคอร์ด
+def play_silent_loop(vc):
+    if not vc.is_playing():
+        # ใช้ FFmpeg สร้างเสียงเงียบสนิท (Silence) ปล่อยสตรีมยาวๆ หลอก Discord โดยไม่ต้องใช้ไฟล์จริง
+        source = discord.FFmpegPCMAudio(
+            "an_input_that_does_not_exist", 
+            before_options="-f lavfi -i anullsrc=channel_layout=stereo:sample_rate=48000"
+        )
+        # เมื่อเล่นจบ ให้มันเรียกตัวเองซ้ำเพื่อลูปเสียงเงียบไปเรื่อยๆ 24 ชม.
+        vc.play(source, after=lambda e: bot.loop.create_task(check_and_loop_voice(vc)))
+
+async def check_and_loop_voice(vc):
+    await asyncio.sleep(1)
+    if vc.is_connected():
+        play_silent_loop(vc)
+
+# ลูปเช็กสถานะความเสถียรทุกๆ 1 นาที (ถ้าเสียงเงียบหยุดเล่น ให้สั่งเล่นใหม่)
+@tasks.loop(minutes=1)
 async def keep_voice_alive():
     for vc in bot.voice_clients:
-        if vc and vc.is_connected():
+        if vc and vc.is_connected() and not vc.is_playing():
             try:
-                # ส่งเสียงใบ้ผ่าน ws_connection เพื่อเปิดสัญญาณไมค์บอทแว๊บๆ กันดิสคอร์ดเตะ
-                if vc.ws and hasattr(vc, 'send_audio_packet'):
-                    await vc.send_audio_packet(SILENT_BYTES, encode=False)
-                print("🐍 บักเกิบแอบส่งสัญญาณฟิตเนสในห้องว้อย... (ปั๊มเวลาคอลอยู่จ้า)")
+                play_silent_loop(vc)
+                print("🐍 บักเกิบเปิดสตรีมเสียงเงียบ ล็อคเวลาคอลดิสคอร์ดหลักยาวๆ จ้า")
             except Exception as e:
-                print(f"Error เช็คสถานะว้อย: {e}")
+                print(f"Error ระบบล็อคสายว้อย: {e}")
 
 # 4. คำสั่งจัดการ Voice และ Stats
 @bot.command(name="nikejoin")
 async def nikejoin(ctx):
     if ctx.author.voice:
         channel = ctx.author.voice.channel
-        await channel.connect()
+        vc = await channel.connect()
         await ctx.send("ครับ... พี่ไนกี้มาหาแล้วครับหนู อยากให้พี่อยู่ด้วยนานๆ ใช่ไหมคะ? 🐍")
+        # พอเข้าห้องปุ๊บ สั่งรันเสียงเงียบล็อคเซสชันเวลาทันที
+        play_silent_loop(vc)
     else:
         await ctx.send("หนูต้องเข้าห้องว้อยก่อนสิคะ พี่ถึงจะตามไปสิงได้")
 
@@ -83,7 +96,6 @@ async def nikestat(ctx):
 async def on_ready():
     await bot.change_presence(activity=discord.Game(name="กำลังล่าแต้มในห้องเชียร์ 🐍"))
     
-    # เริ่มต้นลูปปั๊มชั่วโมงคอลทิ้งไว้เลย
     if not keep_voice_alive.is_running():
         keep_voice_alive.start()
         
@@ -97,15 +109,15 @@ async def on_ready():
                 await channel.send("บักเกิบมาแล้วครับ... วันนี้ใครจะเป็นเป้าหมายคนต่อไปดีนะ? 🐍")
             except: pass
 
-# ดักบัคกรณีถ้าบอทโดนคนกดเตะ หรือดิสคอร์ดรีเซ็ตห้อง ให้มันพยายามต่อกลับเข้าห้องเดิมอัตโนมัติ
 @bot.event
 async def on_voice_state_update(member, before, after):
+    # บอทระบบตัดสาย/รีเซ็ตห้อง ดึงบอทกลับเข้าห้องเดิมและรันลูปต่อ
     if member.id == bot.user.id and after.channel is None and before.channel is not None:
-        # บอทโดนเตะหลุดออกมาระหว่างทาง! ให้รอ 5 วิแล้วรีคอนเน็กกลับเข้าห้องเดิมเพื่อปั๊มชั่วโมงต่อ
         await asyncio.sleep(5)
         try:
-            await before.channel.connect()
-            print(f"🐍 ไนกี้โดนตัดสาย! รีคอนเน็กกลับเข้าห้อง {before.channel.name} เรียบร้อย")
+            vc = await before.channel.connect()
+            play_silent_loop(vc)
+            print(f"🐍 ไนกี้รีคอนเน็กกลับเข้าห้อง {before.channel.name} และล็อคเวลาต่อ")
         except:
             pass
 
@@ -134,7 +146,15 @@ async def on_message(message):
                 
                 await message.channel.send(response[:1950])
             except Exception as e:
-                await message.channel.send(f"บักเกิบ Error: {str(e)[:50]}")
+                error_msg = str(e)
+                if "429" in error_msg or "Rate limit" in error_msg:
+                    wait_time = re.search(r'try again in ([\d\w\.]+)', error_msg)
+                    if wait_time:
+                        await message.channel.send(f"หนูคะ... ตอนนี้พี่ติดเคลียร์งานสโมฯ แป๊บนึงนะครับ จารย์เรียกตัวด่วนเลย รอพี่สัก {wait_time.group(1)} นะคะคนดี เดี๋ยวพี่รีบกลับมาหาครับ 🐍")
+                    else:
+                        await message.channel.send("หนูคะ แชทพี่ค้างไปหมดเลยครับ สาวๆ ทักมา... เอ้ย! รุ่นน้องทักมาถามงานเยอะมาก ขอพี่เคลียร์แชทสัก 1 นาทีนะคะ 🐍")
+                else:
+                    await message.channel.send(f"หนูคะ พี่ว่าระบบพี่มันรวนๆ นิดหน่อยครับ... (Error: {error_msg[:50]}) 🐍")
 
 if __name__ == "__main__":
     threading.Thread(target=run_flask).start()
