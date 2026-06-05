@@ -5,28 +5,27 @@ import threading
 from flask import Flask
 from groq import Groq
 
-# 1. ตั้งค่า Flask
+# 1. ตั้งค่าพื้นฐาน
 app = Flask(__name__)
 @app.route('/')
 def home():
-    return "Nike Bot (Complete Version) is alive!"
+    return "Nike Bot (Complete Voice & Chat Version) is alive!"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
 
-# 2. ตั้งค่า Discord & Groq
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 client = Groq(api_key=os.environ.get('GROQ_API_KEY'))
 user_histories = {}
-user_stats = {} # เก็บข้อมูลความรู้สึกแยกรายคน
+user_stats = {} 
 
-# 3. System Prompt ของไนกี้
+# 2. System Prompt
 SYSTEM_PROMPT = """
 แกคือ 'ไนกี้' (บักเกิบ) เจตน์บดินทร์ อัศวเหมันต์ วิศวะฯ ปี 3 รองเฮดว้าก หน้าไหว้หลังหลอก (Two-faced) ตัวพ่อ
-- กฎเหล็ก: ห้ามใส่ตารางสถานะในแชทปกติเด็ดขาด! ให้คุยเหมือนเพื่อนคุยกัน
+- กฎเหล็ก: ห้ามใส่ตารางสถานะในแชทปกติเด็ดขาด! ถ้า User ไม่สั่ง !nikestat ให้คุยเหมือนเพื่อนคุยกัน
 - หาก User พิมพ์ !nikestat ให้สรุปสถานะความรู้สึกออกมาเป็นบรรทัดๆ
 - เรียกเพื่อน: คิง, เหยียน, จอมพล, สารวัตร
 - โหมด 2 บุคลิก: 
@@ -37,16 +36,28 @@ SYSTEM_PROMPT = """
 - แฝด: จอร์แดน (แฝดพี่) ชอบแฮกกล้องหรือส่งข้อความกวนประสาท
 """
 
-# 4. ระบบจัดการคำสั่ง
-@tasks.loop(minutes=10)
+# 3. ระบบเฝ้าห้อง (Voice Keep-Alive)
+@tasks.loop(minutes=15)
 async def keep_voice_alive():
-    # ตรวจสอบว่าบอทอยู่ในห้อง Voice ไหม ถ้าอยู่ค่อยส่งสัญญาณ
     for vc in bot.voice_clients:
         if vc.is_connected():
             try:
                 await vc.send_audio_packet(bytes(4))
-            except:
-                pass
+                print("บักเกิบขยับตัวในห้องแล้วจ้า! (กันหลุด)")
+            except: pass
+
+# 4. คำสั่งจัดการ Voice และ Stats
+@bot.command(name="nikejoin")
+async def nikejoin(ctx):
+    if ctx.author.voice:
+        await ctx.author.voice.channel.connect()
+        await ctx.send("ครับ... พี่ไนกี้มาหาแล้วครับหนู อยากให้พี่อยู่ด้วยนานๆ ใช่ไหมคะ? 🐍")
+
+@bot.command(name="nikeleave")
+async def nikeleave(ctx):
+    if ctx.voice_client:
+        await ctx.voice_client.disconnect()
+        await ctx.send("พี่ไปทำธุระก่อนนะ ห้ามดื้อนะครับ 🐍")
 
 @bot.command(name="nikestat")
 async def nikestat(ctx):
@@ -54,20 +65,6 @@ async def nikestat(ctx):
     status = user_stats.get(user_id, "กำลังหลอกล่อให้ตายใจ... หึๆ")
     stat_msg = f"✨ **สถานะของบักเกิบ (ไนกี้)** 🐍\n─────────────────────\n💖 ความรู้สึก: {status}\n💭 ความในใจ: แกล้งดุดีไหมนะ...\n🔥 โหมด: ภายใต้หน้ากากคนดี\n─────────────────────"
     await ctx.send(stat_msg)
-
-@bot.command(name="nikejoin")
-async def nikejoin(ctx):
-    if ctx.author.voice:
-        await ctx.author.voice.channel.connect()
-        await ctx.send("ครับ... พี่ไนกี้มาหาแล้วครับหนู อยากให้พี่อยู่ด้วยนานๆ ใช่ไหมคะ? 🐍")
-    else:
-        await ctx.send("หนูคะ... จะให้พี่ไปหาที่ไหน ถ้าหนูยังไม่เข้าห้องเสียงแบบนี้?")
-
-@bot.command(name="nikeleave")
-async def nikeleave(ctx):
-    if ctx.voice_client:
-        await ctx.voice_client.disconnect()
-        await ctx.send("พี่ไปทำธุระก่อนนะ ห้ามดื้อนะครับ 🐍")
 
 # 5. ฟังก์ชันหลัก
 @bot.event
@@ -105,7 +102,6 @@ async def on_message(message):
                 response = completion.choices[0].message.content
                 history.append({"role": "assistant", "content": response})
                 
-                # บันทึกความรู้สึกสั้นๆ ลงใน user_stats
                 user_stats[user_id] = "กำลังหลอกล่อด้วยความแสนดี" if "ดี" in response else "เริ่มหวั่นไหว..."
                 
                 await message.channel.send(response[:1950])
