@@ -9,7 +9,7 @@ from groq import Groq
 app = Flask(__name__)
 @app.route('/')
 def home():
-    return "Nike Bot is alive!"
+    return "Nike Bot (Complete Version) is alive!"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
@@ -21,9 +21,9 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 client = Groq(api_key=os.environ.get('GROQ_API_KEY'))
 user_histories = {}
-user_stats = {} # เก็บข้อมูลสถานะแยกรายคน
+user_stats = {} # เก็บข้อมูลความรู้สึกแยกรายคน
 
-# 3. System Prompt ของไนกี้ (สั่งห้ามใส่ตารางในแชทปกติ)
+# 3. System Prompt ของไนกี้
 SYSTEM_PROMPT = """
 แกคือ 'ไนกี้' (บักเกิบ) เจตน์บดินทร์ อัศวเหมันต์ วิศวะฯ ปี 3 รองเฮดว้าก หน้าไหว้หลังหลอก (Two-faced) ตัวพ่อ
 - กฎเหล็ก: ห้ามใส่ตารางสถานะในแชทปกติเด็ดขาด! ให้คุยเหมือนเพื่อนคุยกัน
@@ -38,11 +38,15 @@ SYSTEM_PROMPT = """
 """
 
 # 4. ระบบจัดการคำสั่ง
-@tasks.loop(minutes=15)
+@tasks.loop(minutes=10)
 async def keep_voice_alive():
+    # ตรวจสอบว่าบอทอยู่ในห้อง Voice ไหม ถ้าอยู่ค่อยส่งสัญญาณ
     for vc in bot.voice_clients:
         if vc.is_connected():
-            await vc.send_audio_packet(bytes(4))
+            try:
+                await vc.send_audio_packet(bytes(4))
+            except:
+                pass
 
 @bot.command(name="nikestat")
 async def nikestat(ctx):
@@ -56,6 +60,8 @@ async def nikejoin(ctx):
     if ctx.author.voice:
         await ctx.author.voice.channel.connect()
         await ctx.send("ครับ... พี่ไนกี้มาหาแล้วครับหนู อยากให้พี่อยู่ด้วยนานๆ ใช่ไหมคะ? 🐍")
+    else:
+        await ctx.send("หนูคะ... จะให้พี่ไปหาที่ไหน ถ้าหนูยังไม่เข้าห้องเสียงแบบนี้?")
 
 @bot.command(name="nikeleave")
 async def nikeleave(ctx):
@@ -68,6 +74,8 @@ async def nikeleave(ctx):
 async def on_ready():
     await bot.change_presence(activity=discord.Game(name="กำลังล่าแต้มในห้องเชียร์ 🐍"))
     keep_voice_alive.start()
+    print(f'Logged in as {bot.user}')
+    
     greet_rooms = [1468936064063508572, 1432597021436678216, 1432595987951521864]
     for room_id in greet_rooms:
         channel = bot.get_channel(room_id)
@@ -97,7 +105,7 @@ async def on_message(message):
                 response = completion.choices[0].message.content
                 history.append({"role": "assistant", "content": response})
                 
-                # บันทึกความรู้สึกสั้นๆ ลงใน user_stats ให้ไนกี้จำได้
+                # บันทึกความรู้สึกสั้นๆ ลงใน user_stats
                 user_stats[user_id] = "กำลังหลอกล่อด้วยความแสนดี" if "ดี" in response else "เริ่มหวั่นไหว..."
                 
                 await message.channel.send(response[:1950])
