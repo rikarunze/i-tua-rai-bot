@@ -114,6 +114,12 @@ async def nikestat(ctx):
     stat_msg = f"✨ **สถานะของบักเกิบ (ไนกี้)** 🐍\n─────────────────────\n💖 ความรู้สึก: {status}\n💭 ความในใจ: แกล้งดุดีไหมนะ...\n🔥 โหมด: ภายใต้หน้ากากคนดี\n─────────────────────"
     await ctx.send(stat_msg)
 
+@bot.command(name="nikeclear")
+async def nikeclear(ctx):
+    user_id = ctx.author.id
+    user_histories[user_id] = []
+    await ctx.send("ล้างสมองเรียบร้อย! ลืมเรื่องเก่าๆ ที่คุยกันไปหมดแล้ว... มาเริ่มนัวใหม่กับพี่ไนกี้กันดีกว่านะคะ 🐍💅")
+
 # 5. ฟังก์ชันหลัก
 @bot.event
 async def on_ready():
