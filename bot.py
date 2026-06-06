@@ -12,7 +12,7 @@ from groq import Groq
 app = Flask(__name__)
 @app.route('/')
 def home():
-    return "Nike Bot (Dual-Core Fixed Version) is alive!"
+    return "Nike Bot (Dual-Core + Native Silence) is alive!"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
@@ -25,11 +25,9 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 # ==========================================
 # 🔑 ระบบดักจับ API Key (ฉลาดขึ้น ดักทุกทาง)
 # ==========================================
-# ดักจับทั้ง GROQ_API_KEY หรือ GROQ_API_KEYS (เผื่อแกใส่แบบไหนมาก็ใช้ได้หมด)
 GROQ_KEY = os.environ.get('GROQ_API_KEY') or os.environ.get('GROQ_API_KEYS')
 OR_KEY = os.environ.get('OPENROUTER_API_KEY')
 
-# ล้างช่องว่างเผื่อก๊อปติดมา
 if GROQ_KEY: GROQ_KEY = GROQ_KEY.strip()
 if OR_KEY: OR_KEY = OR_KEY.strip()
 
@@ -52,33 +50,29 @@ SYSTEM_PROMPT = """
 - แฝด: จอร์แดน (แฝดพี่) ชอบแฮกกล้องหรือส่งข้อความกวนประสาท
 """
 
-# 🕒 ฟังก์ชันสำหรับเล่นเสียงใบ้แบบวนลูป (แก้บั๊ก No such file)
-def play_silent_loop(vc):
-    if vc and vc.is_connected() and not vc.is_playing():
-        try:
-            # แก้ไขตรงนี้: ใช้ช่องทางตรง -i null เพื่อสร้างเสียงเงียบสนิท ไม่ต้องเรียกชื่อไฟล์มั่วซั่ว
-            source = discord.FFmpegPCMAudio(
-                "-",
-                before_options="-f lavfi -i anullsrc=channel_layout=stereo:sample_rate=48000",
-                options="-f s16le"
-            )
-            vc.play(source, after=lambda e: bot.loop.create_task(check_and_loop_voice(vc)))
-        except Exception as e:
-            print(f"ขัดข้องตอนเปิดเสียงใบ้: {e}")
+# ==========================================
+# 🕒 คลาสกำเนิดเสียงเงียบแบบ Native (ลาก่อน FFmpeg!)
+# ==========================================
+class NativeSilentAudio(discord.AudioSource):
+    def read(self):
+        # ปล่อยคลื่นเสียงว่างเปล่า (Silence) ขนาด 20ms รัวๆ ตลอดกาล
+        return b'\x00' * 3840
 
-async def check_and_loop_voice(vc):
-    await asyncio.sleep(2) # เพิ่มเวลาหน่วงกันลูปนรกสแปม
-    if vc and vc.is_connected() and not vc.is_playing():
-        play_silent_loop(vc)
+    def is_opus(self):
+        return False
+# ==========================================
 
+# เช็กสถานะและเล่นเสียงเงียบทุก 1 นาทีกันบอทหลับ
 @tasks.loop(minutes=1)
 async def keep_voice_alive():
     for vc in bot.voice_clients:
-        if vc and vc.is_connected() and not vc.is_playing():
-            try:
-                play_silent_loop(vc)
-                print("🐍 บักเกิบล็อคสายเสียงเงียบ ปั๊มเวลาสะสมดิสหลักเรียบร้อย")
-            except: pass
+        if vc and vc.is_connected():
+            if not vc.is_playing():
+                try:
+                    vc.play(NativeSilentAudio())
+                    print("🐍 บักเกิบล็อคสายเสียงเงียบ (Native Mode) ปั๊มเวลาคอลดิสหลักฉลุย!")
+                except Exception as e:
+                    print(f"เล่นเสียงเงียบไม่ได้: {e}")
 
 # 4. คำสั่งจัดการ Voice และ Stats
 @bot.command(name="nikejoin")
@@ -87,7 +81,9 @@ async def nikejoin(ctx):
         channel = ctx.author.voice.channel
         vc = await channel.connect()
         await ctx.send("ครับ... พี่ไนกี้มาหาแล้วครับหนู อยากให้พี่อยู่ด้วยนานๆ ใช่ไหมคะ? 🐍")
-        play_silent_loop(vc)
+        # สั่งให้เล่นเสียงเงียบจากคลาส Native ทันที
+        if not vc.is_playing():
+            vc.play(NativeSilentAudio())
     else:
         await ctx.send("หนูต้องเข้าห้องว้อยก่อนสิคะ พี่ถึงจะตามไปสิงได้")
 
@@ -114,11 +110,13 @@ async def on_ready():
 
 @bot.event
 async def on_voice_state_update(member, before, after):
+    # บอทระบบตัดสาย/รีเซ็ตห้อง ดึงบอทกลับเข้าห้องเดิมและรันลูปต่อ
     if member.id == bot.user.id and after.channel is None and before.channel is not None:
         await asyncio.sleep(5)
         try:
             vc = await before.channel.connect()
-            play_silent_loop(vc)
+            if not vc.is_playing():
+                vc.play(NativeSilentAudio())
         except: pass
 
 @bot.event
