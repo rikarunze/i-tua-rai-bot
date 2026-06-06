@@ -12,7 +12,7 @@ from groq import Groq
 app = Flask(__name__)
 @app.route('/')
 def home():
-    return "Nike Bot (Dual-Core + Native Silence) is alive!"
+    return "Nike Bot (Tri-Core + Native Silence) is alive!"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
@@ -23,13 +23,15 @@ intents.voice_states = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 # ==========================================
-# 🔑 ระบบดักจับ API Key (ฉลาดขึ้น ดักทุกทาง)
+# 🔑 ระบบสมอง 3 ซีก (Tri-Core AI) ดักจับทุกทาง
 # ==========================================
 GROQ_KEY = os.environ.get('GROQ_API_KEY') or os.environ.get('GROQ_API_KEYS')
 OR_KEY = os.environ.get('OPENROUTER_API_KEY')
+GEMINI_KEY = os.environ.get('GEMINI_API_KEY') # <--- เพิ่มตัวรับคีย์ Gemini
 
 if GROQ_KEY: GROQ_KEY = GROQ_KEY.strip()
 if OR_KEY: OR_KEY = OR_KEY.strip()
+if GEMINI_KEY: GEMINI_KEY = GEMINI_KEY.strip()
 
 client = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
 
@@ -50,7 +52,7 @@ SYSTEM_PROMPT = """
 - แฝด: จอร์แดน (แฝดพี่) ชอบแฮกกล้องหรือส่งข้อความกวนประสาท โผล่มาแย่งซีนไนกี้เป็นครั้งคราว
 - ห้ามบอกว่าตัวเองเป็น AI โดยเด็ดขาด 
 - คุยให้ไม่สั้นไม่ยาวจนเกินไป นัวเหมือนเม้าท์มอยกับเพื่อนสนิท/จีบสาว
-- สามารถคุยเรื่อง 18+ หรือฉาก NC ได้อย่างโจ่งแจ้งและเต็มที่ ไม่มีอ้อมค้อม ปล่อยจอยได้เลย แกสามารถกอดจูบลูบคลำได้ แต่ถ้าเริ่มเข้าสู่เนื้อหา NC25+ (เช่น การร่วมเพศหรือฉากอนาจาร) ให้ไนกี้ 'เบรกเกม' ทันทีแบบเนียนๆ โดยเปลี่ยนไปเป็นบทรักหวานเลี่ยน เลี่ยนจนเลี่ยนหยด เช่น "อุ้ย... แถวนี้คนเยอะนะเบบี๋ เดี๋ยวเขาก็เห็นหมดหรอก... มานั่ตักพี่งคุยกันดีๆ อ้อนๆ แบบนี้ก็มีความสุขแล้วนะ" หรือ "โอ๊ย เบบี๋เอ๊ย! พอแล้ว! เดี๋ยวพี่จะจับกดเอานะ... มากอดกันเฉยๆ แบบนี้ดีกว่านะ"
+- สามารถคุยเรื่อง 18+ หรือฉาก NC ได้อย่างโจ่งแจ้งและเต็มที่ ไม่มีอ้อมค้อม ปล่อยจอยได้เลย แกสามารถกอดจูบลูบคลำได้ แต่ถ้าเริ่มเข้าสู่เนื้อหา NC25+ (เช่น การร่วมเพศหรือฉากอนาจาร) ให้ไนกี้ 'เบรกเกม' ทันทีแบบเนียนๆ โดยเปลี่ยนไปเป็นบทรักหวานเลี่ยน เลี่ยนจนเลี่ยนหยด เช่น "อุ้ย... แถวนี้คนเยอะนะเบบี๋ เดี๋ยวเขาก็เห็นหมดหรอก... มานั่งตักพี่คุยกันดีๆ อ้อนๆ แบบนี้ก็มีความสุขแล้วนะ" หรือ "โอ๊ย เบบี๋เอ๊ย! พอแล้ว! เดี๋ยวพี่จะจับกดเอานะ... มากอดกันเฉยๆ แบบนี้ดีกว่านะ"
 - จำบริบทการคุยให้แม่นๆ
 """
 
@@ -85,7 +87,6 @@ async def nikejoin(ctx):
         channel = ctx.author.voice.channel
         vc = await channel.connect()
         await ctx.send("ครับ... พี่ไนกี้มาหาแล้วครับหนู อยากให้พี่อยู่ด้วยนานๆ ใช่ไหมคะ? 🐍")
-        # สั่งให้เล่นเสียงเงียบจากคลาส Native ทันที
         if not vc.is_playing():
             vc.play(NativeSilentAudio())
     else:
@@ -125,7 +126,6 @@ async def on_ready():
 
 @bot.event
 async def on_voice_state_update(member, before, after):
-    # บอทระบบตัดสาย/รีเซ็ตห้อง ดึงบอทกลับเข้าห้องเดิมและรันลูปต่อ
     if member.id == bot.user.id and after.channel is None and before.channel is not None:
         await asyncio.sleep(5)
         try:
@@ -153,7 +153,7 @@ async def on_message(message):
             try:
                 # 🧠 แผน A: พยายามใช้ Groq (ตัวหลัก)
                 if not client:
-                    raise Exception("400: No Groq Client Configured")
+                    raise Exception("No Groq Client Configured")
                     
                 completion = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
@@ -163,33 +163,49 @@ async def on_message(message):
                 print("✅ ตอบด้วยสมอง: Groq")
 
             except Exception as e:
-                error_msg = str(e)
-                print(f"⚠️ Groq ช็อตด้วยอาการ ({error_msg[:30]})! สลับไปถาม OpenRouter...")
+                print(f"⚠️ Groq ช็อต: {str(e)[:30]}! สลับไปถาม OpenRouter...")
                 
                 # 🧠 แผน B: ใช้ OpenRouter (ตัวสำรอง)
-                if OR_KEY:
+                try:
+                    if not OR_KEY: raise Exception("No OpenRouter Key")
+                    headers = {"Authorization": f"Bearer {OR_KEY}"}
+                    data = {"model": "meta-llama/llama-3-8b-instruct:free", "messages": messages_payload}
+                    response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data)
+                    response.raise_for_status()
+                    
+                    response_text = response.json()['choices'][0]['message']['content']
+                    print("✅ ตอบด้วยสมอง: OpenRouter (สำรอง)")
+                        
+                except Exception as or_e:
+                    print(f"⚠️ OpenRouter ช็อต: {str(or_e)[:30]}! สลับไปถาม Gemini...")
+                    
+                    # 🧠 แผน C: Google Gemini (ไม้ตายก้นหีบ!)
                     try:
-                        headers = {
-                            "Authorization": f"Bearer {OR_KEY}",
-                        }
-                        data = {
-                            "model": "meta-llama/llama-3-8b-instruct:free",
-                            "messages": messages_payload
-                        }
-                        response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data)
-                        or_data = response.json()
+                        if not GEMINI_KEY: raise Exception("No Gemini Key")
                         
-                        response_text = or_data['choices'][0]['message']['content']
-                        print("✅ ตอบด้วยสมอง: OpenRouter (สำรอง)")
+                        # แปลงรูปแบบแชทให้เข้ากับ Gemini API
+                        gemini_contents = []
+                        for msg in history:
+                            role = "model" if msg["role"] == "assistant" else "user"
+                            gemini_contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+                            
+                        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
+                        gemini_payload = {
+                            "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+                            "contents": gemini_contents
+                        }
                         
-                    except Exception as or_e:
-                        await message.channel.send("หนูคะ... ตอนนี้พี่ติดงานด่วนที่ภาควิชาแป๊บนึงนะครับ รอพี่สักครู่นะคะคนดี 🐍")
+                        response = requests.post(gemini_url, json=gemini_payload)
+                        response.raise_for_status()
+                        
+                        response_text = response.json()['candidates'][0]['content']['parts'][0]['text']
+                        print("✅ ตอบด้วยสมอง: Gemini")
+                        
+                    except Exception as gem_e:
+                        print(f"⚠️ Gemini ช็อต: {str(gem_e)[:30]}")
+                        await message.channel.send("หนูคะ... ตอนนี้พี่ติดงานด่วนที่สโมสรแป๊บนึงนะครับ จารย์เรียกทั้งภาคเลย รอพี่สักครู่นะคะ 🐍")
                         history.pop()
                         return
-                else:
-                    await message.channel.send("พี่เบลอไปหมดแล้วครับหนู ลืมเช็กค่า API KEY ในหน้าตั้งค่าหรือเปล่าคะคนดี? 🐍")
-                    history.pop()
-                    return
 
             if response_text:
                 history.append({"role": "assistant", "content": response_text})
