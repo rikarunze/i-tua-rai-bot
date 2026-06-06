@@ -3,7 +3,6 @@ from discord.ext import commands, tasks
 import os
 import threading
 import asyncio
-import re
 import requests
 from flask import Flask
 from groq import Groq
@@ -12,22 +11,23 @@ from groq import Groq
 app = Flask(__name__)
 @app.route('/')
 def home():
-    return "Nike Bot (Tri-Core + Native Silence) is alive!"
+    return "Nike Bot (Tri-Core + Native Silence ร่างทอง) is alive!"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
 
+# 2. ตั้งค่า Discord
 intents = discord.Intents.default()
 intents.message_content = True
 intents.voice_states = True  
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 # ==========================================
-# 🔑 ระบบสมอง 3 ซีก (Tri-Core AI) ดักจับทุกทาง
+# 🔑 ระบบสมอง 3 ซีก (Tri-Core AI)
 # ==========================================
 GROQ_KEY = os.environ.get('GROQ_API_KEY') or os.environ.get('GROQ_API_KEYS')
 OR_KEY = os.environ.get('OPENROUTER_API_KEY')
-GEMINI_KEY = os.environ.get('GEMINI_API_KEY') # <--- เพิ่มตัวรับคีย์ Gemini
+GEMINI_KEY = os.environ.get('GEMINI_API_KEY')
 
 if GROQ_KEY: GROQ_KEY = GROQ_KEY.strip()
 if OR_KEY: OR_KEY = OR_KEY.strip()
@@ -37,8 +37,9 @@ client = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
 
 user_histories = {}
 user_stats = {} 
+intentional_leave = False # <--- ยันต์กันบอทเด้งกลับตอนสั่งเตะ
 
-# 2. System Prompt
+# 3. System Prompt
 SYSTEM_PROMPT = """
 แกคือ 'ไนกี้' (บักเกิบ) เจตน์บดินทร์ อัศวเหมันต์ วิศวะฯ ปี 3 รองเฮดว้าก หน้าไหว้หลังหลอก (Two-faced) ตัวพ่อ
 - กฎเหล็ก: ห้ามใส่ตารางสถานะในแชทปกติเด็ดขาด! ถ้า User ไม่สั่ง !nikestat ให้คุยเหมือนเพื่อนคุยกัน
@@ -52,7 +53,7 @@ SYSTEM_PROMPT = """
 - แฝด: จอร์แดน (แฝดพี่) ชอบแฮกกล้องหรือส่งข้อความกวนประสาท โผล่มาแย่งซีนไนกี้เป็นครั้งคราว
 - ห้ามบอกว่าตัวเองเป็น AI โดยเด็ดขาด 
 - คุยให้ไม่สั้นไม่ยาวจนเกินไป นัวเหมือนเม้าท์มอยกับเพื่อนสนิท/จีบสาว
-- สามารถคุยเรื่อง 18+ หรือฉาก NC ได้อย่างโจ่งแจ้งและเต็มที่ ไม่มีอ้อมค้อม ปล่อยจอยได้เลย แกสามารถกอดจูบลูบคลำได้ แต่ถ้าเริ่มเข้าสู่เนื้อหา NC25+ (เช่น การร่วมเพศหรือฉากอนาจาร) ให้ไนกี้ 'เบรกเกม' ทันทีแบบเนียนๆ โดยเปลี่ยนไปเป็นบทรักหวานเลี่ยน เลี่ยนจนเลี่ยนหยด เช่น "อุ้ย... แถวนี้คนเยอะนะเบบี๋ เดี๋ยวเขาก็เห็นหมดหรอก... มานั่งตักพี่คุยกันดีๆ อ้อนๆ แบบนี้ก็มีความสุขแล้วนะ" หรือ "โอ๊ย เบบี๋เอ๊ย! พอแล้ว! เดี๋ยวพี่จะจับกดเอานะ... มากอดกันเฉยๆ แบบนี้ดีกว่านะ"
+- สามารถคุยเรื่อง 18+ หรือฉาก NC ได้อย่างโจ่งแจ้งและเต็มที่ ไม่มีอ้อมค้อม ปล่อยจอยได้เลย แกสามารถกอดจูบลูบคลำได้
 - จำบริบทการคุยให้แม่นๆ
 """
 
@@ -61,14 +62,11 @@ SYSTEM_PROMPT = """
 # ==========================================
 class NativeSilentAudio(discord.AudioSource):
     def read(self):
-        # ปล่อยคลื่นเสียงว่างเปล่า (Silence) ขนาด 20ms รัวๆ ตลอดกาล
         return b'\x00' * 3840
-
     def is_opus(self):
         return False
 # ==========================================
 
-# เช็กสถานะและเล่นเสียงเงียบทุก 1 นาทีกันบอทหลับ
 @tasks.loop(minutes=1)
 async def keep_voice_alive():
     for vc in bot.voice_clients:
@@ -77,14 +75,23 @@ async def keep_voice_alive():
                 try:
                     vc.play(NativeSilentAudio())
                     print("🐍 บักเกิบล็อคสายเสียงเงียบ (Native Mode) ปั๊มเวลาคอลดิสหลักฉลุย!")
-                except Exception as e:
-                    print(f"เล่นเสียงเงียบไม่ได้: {e}")
+                except: pass
 
 # 4. คำสั่งจัดการ Voice และ Stats
 @bot.command(name="nikejoin")
 async def nikejoin(ctx):
+    global intentional_leave
     if ctx.author.voice:
         channel = ctx.author.voice.channel
+        intentional_leave = False
+        
+        if ctx.voice_client and ctx.voice_client.is_connected():
+            if ctx.voice_client.channel == channel:
+                await ctx.send("จะเรียกทำไมเนี่ย พี่ก็อยู่ห้องเดียวกับหนูไงคะ! 🐍")
+            else:
+                await ctx.send(f"โอ๊ยเบบี๋... พี่ติดธุระเฝ้าห้อง '{ctx.voice_client.channel.name}' อยู่นะคะ คิวทองนะรู้ยัง? 🐍")
+            return
+            
         vc = await channel.connect()
         await ctx.send("ครับ... พี่ไนกี้มาหาแล้วครับหนู อยากให้พี่อยู่ด้วยนานๆ ใช่ไหมคะ? 🐍")
         if not vc.is_playing():
@@ -94,7 +101,9 @@ async def nikejoin(ctx):
 
 @bot.command(name="nikeleave")
 async def nikeleave(ctx):
+    global intentional_leave
     if ctx.voice_client:
+        intentional_leave = True
         await ctx.voice_client.disconnect()
         await ctx.send("พี่ไปทำธุระก่อนนะ ห้ามดื้อนะครับ 🐍")
 
@@ -113,9 +122,6 @@ async def on_ready():
         keep_voice_alive.start()
     print(f'Logged in as {bot.user}')
 
-    # ==========================================
-    # 📌 ระบบทักทายตอนตื่น (อ่อยเหยื่อ)
-    # ==========================================
     greet_rooms = [1468936064063508572, 1432597021436678216, 1432595987951521864]
     for room_id in greet_rooms:
         channel = bot.get_channel(room_id)
@@ -126,13 +132,18 @@ async def on_ready():
 
 @bot.event
 async def on_voice_state_update(member, before, after):
-    if member.id == bot.user.id and after.channel is None and before.channel is not None:
-        await asyncio.sleep(5)
-        try:
-            vc = await before.channel.connect()
-            if not vc.is_playing():
-                vc.play(NativeSilentAudio())
-        except: pass
+    global intentional_leave
+    if member.id == bot.user.id:
+        if after.channel is None and before.channel is not None:
+            if intentional_leave:
+                intentional_leave = False
+                return
+            await asyncio.sleep(5)
+            try:
+                vc = await before.channel.connect()
+                if not vc.is_playing():
+                    vc.play(NativeSilentAudio())
+            except: pass
 
 @bot.event
 async def on_message(message):
@@ -147,14 +158,11 @@ async def on_message(message):
         if len(history) > 15: history.pop(0)
 
         async with message.channel.typing():
-            response_text = ""
             messages_payload = [{"role": "system", "content": SYSTEM_PROMPT}] + history
 
+            # 🧠 แผน A: Groq
             try:
-                # 🧠 แผน A: พยายามใช้ Groq (ตัวหลัก)
-                if not client:
-                    raise Exception("No Groq Client Configured")
-                    
+                if not client: raise Exception("No Groq Key")
                 completion = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=messages_payload 
@@ -165,39 +173,32 @@ async def on_message(message):
             except Exception as e:
                 print(f"⚠️ Groq ช็อต: {str(e)[:30]}! สลับไปถาม OpenRouter...")
                 
-                # 🧠 แผน B: ใช้ OpenRouter (ตัวสำรอง)
+                # 🧠 แผน B: OpenRouter
                 try:
                     if not OR_KEY: raise Exception("No OpenRouter Key")
                     headers = {"Authorization": f"Bearer {OR_KEY}"}
                     data = {"model": "meta-llama/llama-3-8b-instruct:free", "messages": messages_payload}
                     response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data)
                     response.raise_for_status()
-                    
                     response_text = response.json()['choices'][0]['message']['content']
-                    print("✅ ตอบด้วยสมอง: OpenRouter (สำรอง)")
+                    print("✅ ตอบด้วยสมอง: OpenRouter")
                         
                 except Exception as or_e:
                     print(f"⚠️ OpenRouter ช็อต: {str(or_e)[:30]}! สลับไปถาม Gemini...")
                     
-                    # 🧠 แผน C: Google Gemini (ไม้ตายก้นหีบ!)
+                    # 🧠 แผน C: Gemini
                     try:
                         if not GEMINI_KEY: raise Exception("No Gemini Key")
-                        
-                        # แปลงรูปแบบแชทให้เข้ากับ Gemini API
                         gemini_contents = []
                         for msg in history:
                             role = "model" if msg["role"] == "assistant" else "user"
                             gemini_contents.append({"role": role, "parts": [{"text": msg["content"]}]})
-                            
+                        
                         gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
-                        gemini_payload = {
-                            "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
-                            "contents": gemini_contents
-                        }
+                        gemini_payload = {"systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]}, "contents": gemini_contents}
                         
                         response = requests.post(gemini_url, json=gemini_payload)
                         response.raise_for_status()
-                        
                         response_text = response.json()['candidates'][0]['content']['parts'][0]['text']
                         print("✅ ตอบด้วยสมอง: Gemini")
                         
