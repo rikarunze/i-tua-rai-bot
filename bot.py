@@ -10,7 +10,7 @@ from groq import Groq
 
 app = Flask(__name__)
 @app.route('/')
-def home(): return "Nike Bot (Penta-Core + Native Silence) - Unlimited Mode!"
+def home(): return "Boy Bot (Penta-Core + Native Silence) - Unlimited Mode!"
 
 def run_flask(): app.run(host='0.0.0.0', port=8080)
 
@@ -60,8 +60,6 @@ async def keep_voice_alive():
 async def on_ready():
     keep_voice_alive.start()
     print(f'Logged in as {bot.user}')
-    
-    # 📌 แก้ไขจุดนี้: บังคับซิงค์คำสั่งแบบ Global และคัดลอกลงเซิร์ฟเวอร์ที่บอทอยู่ทันที เพื่อให้รูปโลโก้และคำสั่ง / ขึ้นแน่นอน
     try:
         await bot.tree.sync()
         for guild in bot.guilds:
@@ -104,7 +102,7 @@ async def nickname(interaction: discord.Interaction, name: str):
 
 @bot.tree.command(name="botinfo", description="เช็คสถานะบอททั้งหมดในขณะนี้")
 async def botinfo(interaction: discord.Interaction):
-    embed = discord.Embed(title="🤖 Nike Bot Info", color=discord.Color.blue())
+    embed = discord.Embed(title="🤖 Boy Bot Info", color=discord.Color.blue())
     embed.add_field(name="ชื่อบอท", value="ไนกี้ (บักเกิบ) วิศวะฯ ปี 3", inline=True)
     embed.add_field(name="เอนจิ้น", value="Penta-Core + Native Silence", inline=True)
     embed.add_field(name="สถานะเสียง", value="รันไทม์ถาวร (เปิดบีตเงียบ) 🟢", inline=False)
@@ -118,19 +116,19 @@ async def console(interaction: discord.Interaction):
 async def developers(interaction: discord.Interaction):
     await interaction.response.send_message("🛠️ บอทตัวนี้พัฒนาและเขียนโค้ดขึ้นมาโดยคุณหนูคนเก่ง ร่วมมือกับส้มเองครับ! 🧡")
 
-@bot.tree.command(name="nikestat", description="สรุปสถานะความรู้สึกของพี่ไนกี้ในขณะนี้")
-async def nikestat(interaction: discord.Interaction):
+@bot.tree.command(name="boystat", description="สรุปสถานะความรู้สึกของพี่ไนกี้ในขณะนี้")
+async def boystat(interaction: discord.Interaction):
     status = user_stats.get(interaction.user.id, 'กำลังหลอกล่อให้ตายใจ... หึๆ')
     msg = f"✨ **สถานะของบักเกิบ (ไนกี้)** 🐍\n─────────────────────\n💖 ความรู้สึก: {status}\n💭 ความในใจ: แกล้งดุดีไหมนะ...\n🔥 โหมด: ภายใต้หน้ากากคนดี\n─────────────────────"
     await interaction.response.send_message(msg)
 
-@bot.tree.command(name="nikeclear", description="ล้างสมองบอท ลบความจำแชทเก่าเพื่อเริ่มนัวใหม่")
-async def nikeclear(interaction: discord.Interaction):
+@bot.tree.command(name="boyclear", description="ล้างสมองบอท ลบความจำแชทเก่าเพื่อเริ่มนัวใหม่")
+async def boyclear(interaction: discord.Interaction):
     user_histories[interaction.user.id] = []
     await interaction.response.send_message("ล้างสมองเรียบร้อย! ลืมเรื่องเก่าๆ ที่คุยกันไปหมดแล้ว... มาเริ่มนัวใหม่กับพี่ไนกี้กันดีกว่านะคะ 🐍💅")
 
-@bot.tree.command(name="nikejoin", description="สั่งให้พี่ไนกี้เข้ามาร่วมในห้อง Voice ของคุณ")
-async def nikejoin(interaction: discord.Interaction):
+@bot.tree.command(name="boyjoin", description="สั่งให้พี่ไนกี้เข้ามาร่วมในห้อง Voice ของคุณ")
+async def boyjoin(interaction: discord.Interaction):
     global intentional_leave
     if interaction.user.voice:
         channel = interaction.user.voice.channel
@@ -145,8 +143,8 @@ async def nikejoin(interaction: discord.Interaction):
     else:
         await interaction.response.send_message("หนูต้องเข้าห้องว้อยก่อนสิคะ พี่ถึงจะตามไปสิงได้")
 
-@bot.tree.command(name="nikeleave", description="ไล่พี่ไนกี้ออกจากห้อง Voice")
-async def nikeleave(interaction: discord.Interaction):
+@bot.tree.command(name="boyleave", description="ไล่พี่ไนกี้ออกจากห้อง Voice")
+async def boyleave(interaction: discord.Interaction):
     global intentional_leave
     if interaction.guild.voice_client:
         intentional_leave = True
@@ -193,8 +191,6 @@ async def on_message(message):
                         json={"model": "llama-3.3-70b-versatile", "messages": payload}) as r:
                         if r.status == 200: 
                             res = (await r.json())['choices'][0]['message']['content']
-                        else:
-                            print(f"❌ Groq Error: Status {r.status} - {await r.text()}")
                 except Exception as e: 
                     print(f"❌ Groq Exception: {e}")
 
@@ -206,15 +202,12 @@ async def on_message(message):
                         json={"model": "meta-llama/llama-3-8b-instruct:free", "messages": payload}) as r:
                         if r.status == 200: 
                             res = (await r.json())['choices'][0]['message']['content']
-                        else:
-                            print(f"❌ OpenRouter Error: Status {r.status} - {await r.text()}")
                 except Exception as e: 
                     print(f"❌ OpenRouter Exception: {e}")
 
             # 3. Gemini
             if not res and GEMINI_KEY:
                 try:
-                    # ปรับแก้ระบบสลับ Role ให้ตรงกับมาตรฐานของ Google API อย่างเข้มงวด
                     gem_con = []
                     for m in hist:
                         role_name = "model" if m["role"] == "assistant" else "user"
@@ -224,8 +217,6 @@ async def on_message(message):
                         json={"systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]}, "contents": gem_con}) as r:
                         if r.status == 200: 
                             res = (await r.json())['candidates'][0]['content']['parts'][0]['text']
-                        else:
-                            print(f"❌ Gemini Error: Status {r.status} - {await r.text()}")
                 except Exception as e: 
                     print(f"❌ Gemini Exception: {e}")
 
@@ -237,8 +228,6 @@ async def on_message(message):
                         json={"model": "deepseek-chat", "messages": payload}) as r:
                         if r.status == 200: 
                             res = (await r.json())['choices'][0]['message']['content']
-                        else:
-                            print(f"❌ DeepSeek Error: Status {r.status} - {await r.text()}")
                 except Exception as e: 
                     print(f"❌ DeepSeek Exception: {e}")
 
@@ -249,15 +238,12 @@ async def on_message(message):
                         headers={"Authorization": f"Bearer {CF_TOKEN}"}, json={"messages": payload}) as r:
                         if r.status == 200: 
                             res = (await r.json())['result']['response']
-                        else:
-                            print(f"❌ Cloudflare Error: Status {r.status} - {await r.text()}")
                 except Exception as e: 
                     print(f"❌ Cloudflare Exception: {e}")
 
             # 6. Hugging Face
             if not res and HF_TOKEN:
                 try:
-                    # ปรับ Format ให้เข้ากับสไตล์ Llama 3 เผื่อยิงตรงเข้า Inference API
                     prompt = ""
                     for m in payload:
                         prompt += f"<|start_header_id|>{m['role']}<|end_header_id|>\n{m['content']}<|eot_id|>"
@@ -267,8 +253,6 @@ async def on_message(message):
                         headers={"Authorization": f"Bearer {HF_TOKEN}"}, json={"inputs": prompt}) as r:
                         if r.status == 200: 
                             res = (await r.json())[0]['generated_text'].split("<|start_header_id|>assistant<|end_header_id|>\n")[-1].replace("<|eot_id|>", "").strip()
-                        else:
-                            print(f"❌ Hugging Face Error: Status {r.status} - {await r.text()}")
                 except Exception as e: 
                     print(f"❌ Hugging Face Exception: {e}")
 
